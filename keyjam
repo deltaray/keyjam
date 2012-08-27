@@ -1,0 +1,323 @@
+#!/usr/bin/perl
+
+# keyjam v1.0 - Copyright 2012 by Mark Krenz  (deltaray@slugbug.org)
+
+
+# This is a synthesizer you can use with your computer keyboard. Its
+# basically a frontend to the sox play command, which produces the
+# actual sythesized sounds you hear.
+
+# Because of its design and difficulties in doing things, it lacks
+# (and may never have) certain abilities, like being able to sustain
+# notes until you release the keys and the number of notes you can
+# trigger at the same time is limited to your keyboard drivers, which
+# probably only allow 3 key presses to be registered at once.
+
+# Its more of a novelty. But its fun to play with so I thought I'd
+# release it. Surprisingly, the play command is pretty fast so there
+# is almost no delay between pressing a key and hearing a sound. Every
+# note you here is a process fork. There is a limit on how many
+
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+
+# -- Help --
+#
+# Pressing Esc will quit the program.
+# Press on letter keys to play notes according to the mapping specified below.
+# Use PgUp and PgDown to select a default octave.
+# Use F1 and F2 to select an instrument.
+# Use F11 and F12 to select a range for the random detuning effect.
+#
+# -- Requirements --
+# 1. Sound ability on your system. Duh!
+# 2. Install the Term::ReadKey module (libterm-readkey-perl on Debian)
+# 3. Install the sox software so you have the play command for synthesis.
+
+
+
+use Term::ReadKey;
+ReadMode 4;
+
+# Need this to do non-blocking waits on pids.
+use POSIX ":sys_wait_h";
+
+
+
+
+my $default_octave = 3; # This can be shifted during runtime.
+
+# Shouldn't really change these, unless you don't want to accidentally go to high.
+my $max_octave = 9; # Sox play doesn't go above 9
+my $min_octave = 0; # or below 0
+
+my $max_polyphony = 12; # this is basically just a limit on sox processes being run.
+
+my $detune_default_range = 8; # Default for random detuning effect.
+
+my $default_instrument = 6;
+
+
+# Really instead of playing the waveforms directly, we should have patches where
+# we could do more complex things, but then of course that's a lot more complex
+# to write and we'd probably have to keep track of note frequencies for proper
+# transposition.
+
+my %instruments = (
+    0   =>  'sine',
+    1   =>  'square',
+    2   =>  'triangle',
+    3   =>  'sawtooth',
+    4   =>  'trapezium',
+    5   =>  'exp',
+    6   =>  'pluck',
+);
+# Random micro detuning may also need to be done to counteract the weird
+# interference that develops when overlapping sounds on some waveforms.
+
+my %instrument_options = (
+    'sine'      =>  'fade h 0.1 0.4 0.1',
+    'square'    =>  'fade h 0.1 0.4 0.1',
+    'triangle'  =>  'fade h 0.1 0.4 0.1',
+    'sawtooth'  =>  'fade h 0.1 0.4 0.1',
+    'trapezium' =>  'fade h 0.1 0.4 0.1',
+    'exp'       =>  'fade 0 0.7',
+    'pluck'     =>  'fade 0 0.7',
+);
+
+my %notes = (
+    1   =>  'C',
+    2   =>  'Db',
+    3   =>  'D',
+    4   =>  'Eb',
+    5   =>  'E',
+    6   =>  'F',
+    7   =>  'Gb',
+    8   =>  'G',
+    9   =>  'Ab',
+   10   =>  'A',
+   11   =>  'Bb',
+   12   =>  'B',
+);
+
+# I need to read the termcap or whatever instead of hardcoding
+# the values, but I'll do that later.
+%esckeyseqs = (
+    '[A'    =>  'Up',
+    '[B'    =>  'Down',
+    '[C'    =>  'Right',
+    '[D'    =>  'Left',
+    '[2~'   =>  'Insert',
+    '[3~'   =>  'Delete',
+    '[5~'   =>  'PgUp',
+    '[6~'   =>  'PgDown',
+    '[7~'   =>  'Home',
+    '[8~'   =>  'End',
+    '[11~'  =>  'F1',
+    '[12~'  =>  'F2',
+    '[13~'  =>  'F3',
+    '[14~'  =>  'F4',
+    '[15~'  =>  'F5',
+    '[17~'  =>  'F6',
+    '[18~'  =>  'F7',
+    '[19~'  =>  'F8',
+    '[20~'  =>  'F9',
+    '[21~'  =>  'F10',
+    '[23~'  =>  'F11',
+    '[24~'  =>  'F12',
+);
+
+# The keymaps here are singleletter -> notenumber and can
+# be used to set many different types of mapping. Basically
+# each keymap is a string of letters that correspond to a
+# set of letters that are then mapped to each note and that
+# is computed automatically for the user and they just select
+# which keymapping they want to use. this will allow us to
+# be flexible for different layouts and also allow unique
+# layouts that are different from the traditional piano style
+# mapping.
+
+# Also, we'll make it so that shift + note key raises half tone (sharp)
+
+my %notes_keymaps = (
+    'qwerty_oneoctave_homerow'       =>  'awsed ftgyhuj', # Put in 5 7 grouping for readability.
+    'qwerty_twooctave_alphanumerics' =>  'zsxdc vgbhnjm _q2w3e r5t6y7u',
+    'qwerty_threeoctave_noflats'     =>  'z_x_c v_b_n_m _a_s_d f_g_h_j _q_w_e r_t_y_u',
+    'qwerty_threeoctave_shiftflats'  =>  'zXxCc vBbNnMm _aSsDd fGgHhJj _qWwEe rTtYyUu',
+    'numeric_wholeoctave_noflats'    =>  '1_2_34_5_6_7_8',
+);
+# I may make symbolic keys like F1, etc. available for notes by using the syntax <F1>
+
+# Just uncomment one of the map assignments below to try it.
+my $default_note_keymap = 'qwerty_oneoctave_homerow';
+#my $default_note_keymap = 'qwerty_twooctave_alphanumerics';
+#my $default_note_keymap = 'qwerty_threeoctave_noflats';
+#my $default_note_keymap = 'qwerty_threeoctave_shiftflats';
+#my $default_note_keymap = 'numeric_wholeoctave_noflats';
+
+my $keystring = $notes_keymaps{$default_note_keymap};
+$keystring =~ s/ //g; # Get rid of whitespace.
+#print "keystring: $keystring\n";
+
+# Keep information about hte processes we've spawned so that we can
+# limit the maximum spawned processes, etc.
+%process_pool = ();
+
+
+$n = 0;
+while (1) {
+    my $getkey;
+    while (not defined ($getkey = ReadKey(-1))) {
+       # No key yet
+        # This may be a bit too expensive placed here. But it keeps the process
+        # table clean.
+        $notes_playing = how_many_playing(\%process_pool);
+        select(undef,undef,undef,0.01);
+    }
+    my $key_pressed=""; # This is the actual symbolic key name resolved.
+    # Determine what key was pressed.
+    my $specialkey = 0;
+    if ($getkey eq chr(033)) { # If it starts with escape, check what the sequence is.
+        my $esckeyseq = "";
+        while ($esckeyseq .= ReadKey(-1)) { # Capture more characters.
+            if (defined($esckeyseqs{$esckeyseq})) {
+                #print "special key: " . $esckeyseqs{$esckeyseq} . "\n";
+                $key_pressed = $esckeyseqs{$esckeyseq};
+                $specialkey = 1;
+                $esckeyseq = "";
+                break;
+            }
+        }
+        if ($specialkey == 0) {
+            #print "Esc key pressed.\n";
+            $key_pressed = "Esc";
+        }
+    } else {
+        #print "normal key: $getkey\n";
+        $key_pressed = $getkey # Just a normal key.
+    }
+
+    #print "pressed: $key_pressed\n";
+
+    if ($key_pressed eq "Esc") {
+        ReadMode 0;
+        exit(0);
+    } elsif ($specialkey) { # now do action based on what it was.
+        if ($key_pressed eq "PgUp") { $default_octave++; if($default_octave > $max_octave) {$default_octave = $max_octave; } }
+        elsif ($key_pressed eq "PgDown") { $default_octave--; if ($default_octave < $min_octave) { $default_octave = $min_octave; } }
+        elsif ($key_pressed eq "F1") { --$default_instrument ; $default_instrument = $default_instrument % scalar(keys(%instruments)); print "changed instrument to: $instruments{$default_instrument}\n"; }
+        elsif ($key_pressed eq "F2") { ++$default_instrument ; $default_instrument = $default_instrument % scalar(keys(%instruments)); print "changed instrument to: $instruments{$default_instrument}\n"; }
+        elsif ($key_pressed eq "F11") { --$detune_default_range; print "changed detune_range to: $detune_default_range\n"; }
+        elsif ($key_pressed eq "F12") { ++$detune_default_range; print "changed detune_range to: $detune_default_range\n"; }
+        else { print "Key not defined\n"; }
+    }
+
+    my $instrument = $instruments{$default_instrument};
+    #print "instrument: $instrument\n";
+    my $instrument_options = $instrument_options{$instrument};
+    #print "instrument_options: $instrument_options\n";
+
+    $notenumber = getoffset($key_pressed, $keystring);
+
+    #print "notenumber: $notenumber\n";
+    my $octave_offset = int($notenumber / 13);
+    #print "octave_offset: $octave_offset\n";
+    my $octave_number = $default_octave + $octave_offset;
+    #print "octave_number: $octave_number\n";
+    my $scale_number = $notenumber % 13;
+    #print "scale_number: $scale_number\n";
+    my $note_name = $notes{$scale_number};
+
+    if ($key eq chr(033)) { # Escape key quits.
+        ReadMode 0;
+        exit(0);
+    }
+
+    if ($notes_playing <= $max_polyphony) {
+        if ($note_name ne "") {
+            print "playing ${note_name}${octave_number}\n";
+            # Microtune each note a bit to avoid interference patterns generated by perfect synthsis.
+            my $randomcenttune = int(rand($detune_default_range)) - ($detune_default_range / 2);
+            #print "cent tune: $randomcenttune\n";
+
+            my $command = "play -qn synth ${instrument} ${note_name}${octave_number} ${instrument_options} pitch $randomcenttune";
+            #print "running: $command\n";
+           
+            my $spawnedpid = fork();
+            if (not defined $spawnedpid) {
+                print "no more resources available\n";
+            } elsif ($spawnedpid == 0) { # The child
+                system($command);
+                exit(0);
+            } else { # I'm the parent, keep track of the child pid.
+                $process_pool{$spawnedpid} = time(); # This is probably pretty expensive given what we're doing.
+                #print "spanwedpid: $spawnedpid\n";
+                #waitpid($spawnedpid, 0);
+                waitpid($spawnedpid, WNOHANG);
+            }
+#            $notes_playing = how_many_playing(\%process_pool);
+        }
+    } else {
+        print "Max polyphony reached.\n";
+    }
+    select(undef,undef,undef,0.01);
+    $n++;
+}
+
+
+# Get the count of notes playing (processes running)
+# Call this with a reference to %process_pool
+# This also does garbage collection.
+sub how_many_playing {
+    my $process_pool_ref = shift;
+    my $count = 0;
+    foreach my $pid (keys %$process_pool_ref) {
+        # Check if the pid is still running.
+        $pidcheck = waitpid($pid, WNOHANG); # This will return the pid if its done.
+#        my $pidrunning = kill 0, $pid;
+#        print "kill 0 $pid returned $pidrunning\n";
+        if ($pidcheck) { 
+            # Remove this pid from the management pool.
+            #print "removing $pid from pool management\n";
+            delete $$process_pool_ref{$pid};
+        } else {
+            #print "$pid still running\n";
+            $count++;
+        }
+    }
+    return $count;
+}
+
+
+sub getoffset {
+    my $letter = shift;
+    my $string = shift;
+
+    my $stringlen = length($string);
+    #print "stringlen: $stringlen\n";
+
+    for (my $n = 0; $n <= $stringlen; $n++) {
+        if ($letter eq substr($string, $n, 1)) {
+            #print "n: $n\n";
+            return $n + 1;
+        }
+    }
+    return 0;
+}
+
+ReadMode 0;
+
+
