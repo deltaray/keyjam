@@ -48,17 +48,16 @@ keyboard layout.
 By default, the home row and top row letter keys are used in a piano style way
 to play the notes. Below is an example of what keys on a qwerty keyboard map
 to which piano keys. The note name is shown below the mapped key in parentheses.
+  
+    _____________________________
+    |  | | | |  |  | | | | | |  |
+    |  | | | |  |  | | | | | |  |
+    |  |w| |e|  |  |t| |y| |u|  |
+    |  |_| |_|  |  |_| |_| |_|  |
+    | a | s | d | f | g | h | j |
+    |(C)|(D)|(E)|(F)|(G)|(A)|(B)|
+    |___|___|___|___|___|___|___|
 
-`
-  _____________________________
-  |  | | | |  |  | | | | | |  |
-  |  | | | |  |  | | | | | |  |
-  |  |w| |e|  |  |t| |y| |u|  |
-  |  |_| |_|  |  |_| |_| |_|  |
-  | a | s | d | f | g | h | j |
-  |(C)|(D)|(E)|(F)|(G)|(A)|(B)|
-  |___|___|___|___|___|___|___|
-`
 
 To quit keyjam, press `<Esc>`.
 
