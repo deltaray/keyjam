@@ -26,16 +26,16 @@ note you here is a process fork.
 Requirements
 ============
 
-You will need to make sure you have three things to use keyjam. Well, four actually.
+You will need to make sure you have four things to use keyjam. Well, four actually.
 
-1) Unix, probably Linux would work best since that's where the development is done.
-2) Working sound (Duh!)
-3) Perl's Term::ReadKey module.
-4) sox play command
+*   Unix, probably Linux would work best since that's where the development is done.
+*   Working sound (Duh!)
+*   Perl's Term::ReadKey module.
+*   sox play command
 
 You can install the last two on Debian with the following command
 
- apt-get install sox libterm-readkey-perl
+ `apt-get install sox libterm-readkey-perl`
 
 
 Usage
@@ -49,6 +49,7 @@ By default, the home row and top row letter keys are used in a piano style way
 to play the notes. Below is an example of what keys on a qwerty keyboard map
 to which piano keys. The note name is shown below the mapped key in parentheses.
 
+`
   _____________________________
   |  | | | |  |  | | | | | |  |
   |  | | | |  |  | | | | | |  |
@@ -57,21 +58,29 @@ to which piano keys. The note name is shown below the mapped key in parentheses.
   | a | s | d | f | g | h | j |
   |(C)|(D)|(E)|(F)|(G)|(A)|(B)|
   |___|___|___|___|___|___|___|
+`
 
-To quit keyjam, press <Esc>.
+To quit keyjam, press `<Esc>`.
 
 Here are some other keys that can be used to control keyjam:
 
- - <PgUp>, <PgDown> - Change octave
- - <F1>, <F2> - Change instrument (up/down)
- - <F11>, <F12> - Change detune range effect. (up/down)
+*   `<PgUp>`, `<PgDown>` - Change octave
+*   `<F1>`, `<F2>` - Change instrument (up/down)
+*   `<F11>`, `<F12>` - Change detune range effect. (up/down)
 
+
+Demos
+=====
+
+It would be great to see people demostrating keyjam in online videos
+or something like that. Please e-mail at the contact address below if
+you'd like to share yours and I'll include it here.
 
 Development
 ===========
 
 If you want to change the key mappings, you can define a new one in
-the program itself, just search for the line, "my %notes_keymaps"
+the program itself, just search for the line, `my %notes_keymaps`
 and you'll see where you can define your own mapping. Mapping is done
 by listing the keys that correspond to each note on a twelve tone scale
 in the western tonality system. Spaces used in the mapping string are ignored
@@ -79,7 +88,7 @@ and stripped. You can map additional octaves onto your keymap by continuing
 on after you reach the 12th note. You will need to prefix the following octave
 with an underscore character. keyjam will detect this automatically and
 setup the next octave automatically. You can also skip mappings of certain
-notes by using an underscore character(_)
+notes by using an underscore character(`_`)
 
 
 License
@@ -91,5 +100,5 @@ Please see the file COPYING included with the software.
 Contact
 =======
 
-You may contact the author Mark Krenz at deltaray _ slugbug + org (tr _+ @.)
+You may contact the author Mark Krenz at deltaray _ slugbug + org (`tr _+ @.`)
 
