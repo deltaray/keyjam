@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# keyjam v1.0 - Copyright 2012 by Mark Krenz  (deltaray@slugbug.org)
+# keyjam v1.1 - Copyright 2012 by Mark Krenz  (deltaray@slugbug.org)
 
 
 # This is a synthesizer you can use with your computer keyboard. Its
@@ -37,9 +37,10 @@
 # -- Help --
 #
 # Pressing Esc will quit the program.
+# Press F1 for help or ? to show the keyboard mapping.
 # Press on letter keys to play notes according to the mapping specified below.
 # Use PgUp and PgDown to select a default octave.
-# Use F1 and F2 to select an instrument.
+# Use F3 and F4 to select an instrument.
 # Use F11 and F12 to select a range for the random detuning effect.
 #
 # -- Requirements --
@@ -47,7 +48,7 @@
 # 2. Install the Term::ReadKey module (libterm-readkey-perl on Debian)
 # 3. Install the sox software so you have the play command for synthesis.
 
-
+my $version = 1.1;
 
 use Term::ReadKey;
 ReadMode 4;
@@ -61,8 +62,8 @@ use POSIX ":sys_wait_h";
 my $default_octave = 3; # This can be shifted during runtime.
 
 # Shouldn't really change these, unless you don't want to accidentally go to high.
-my $max_octave = 9; # Sox play doesn't go above 9
-my $min_octave = 0; # or below 0
+my $max_octave = 8; # Sox play doesn't have a full octave above 8
+my $min_octave = 1; # or below 1
 
 my $max_polyphony = 12; # this is basically just a limit on sox processes being run.
 
@@ -150,32 +151,37 @@ my %notes = (
 # layouts that are different from the traditional piano style
 # mapping.
 
-# Also, we'll make it so that shift + note key raises half tone (sharp)
+# Each octave after the first should be preceeded by an underscore. Whitespace is ignored.
+# Underscores are not mapped, but will act like space holders.
 
 my %notes_keymaps = (
     'qwerty_oneoctave_homerow'       =>  'awsed ftgyhuj', # Put in 5 7 grouping for readability.
     'qwerty_twooctave_alphanumerics' =>  'zsxdc vgbhnjm _q2w3e r5t6y7u',
     'qwerty_threeoctave_noflats'     =>  'z_x_c v_b_n_m _a_s_d f_g_h_j _q_w_e r_t_y_u',
     'qwerty_threeoctave_shiftflats'  =>  'zXxCc vBbNnMm _aSsDd fGgHhJj _qWwEe rTtYyUu',
+    'qwerty_fouroctave_noflats'     =>  'z_x_c v_b_n_m _a_s_d f_g_h_j _q_w_e r_t_y_u _1_2_3 4_5_6_7',
     'numeric_wholeoctave_noflats'    =>  '1_2_34_5_6_7_8',
 );
-# I may make symbolic keys like F1, etc. available for notes by using the syntax <F1>
 
 # Just uncomment one of the map assignments below to try it.
 my $default_note_keymap = 'qwerty_oneoctave_homerow';
 #my $default_note_keymap = 'qwerty_twooctave_alphanumerics';
 #my $default_note_keymap = 'qwerty_threeoctave_noflats';
 #my $default_note_keymap = 'qwerty_threeoctave_shiftflats';
+#my $default_note_keymap = 'qwerty_fouroctave_noflats';
 #my $default_note_keymap = 'numeric_wholeoctave_noflats';
 
 my $keystring = $notes_keymaps{$default_note_keymap};
 $keystring =~ s/ //g; # Get rid of whitespace.
 #print "keystring: $keystring\n";
 
-# Keep information about hte processes we've spawned so that we can
+# Keep information about the processes we've spawned so that we can
 # limit the maximum spawned processes, etc.
 %process_pool = ();
 
+print "Welcome to keyjam version $version\n";
+print "Press <Esc> to quit, <F1> for help or just start playing.\n";
+&printkeyboard($default_note_keymap);
 
 $n = 0;
 while (1) {
@@ -193,10 +199,17 @@ while (1) {
     if ($getkey eq chr(033)) { # If it starts with escape, check what the sequence is.
         my $esckeyseq = "";
         while ($esckeyseq .= ReadKey(-1)) { # Capture more characters.
+#            print "length of esckeyseq is now " . length($esckeyseq) . "\n";
             if (defined($esckeyseqs{$esckeyseq})) {
                 #print "special key: " . $esckeyseqs{$esckeyseq} . "\n";
                 $key_pressed = $esckeyseqs{$esckeyseq};
                 $specialkey = 1;
+                $esckeyseq = "";
+                break;
+            } elsif (length($esckeyseq) > 5) {
+                print "Something went wrong, you probably pressed to many keys at once.\n";
+                $specialkey = 0;
+                $key_pressed = "";
                 $esckeyseq = "";
                 break;
             }
@@ -205,6 +218,8 @@ while (1) {
             #print "Esc key pressed.\n";
             $key_pressed = "Esc";
         }
+    } elsif ($getkey eq '?') { # Show help.
+        &printkeyboard($default_note_keymap);
     } else {
         #print "normal key: $getkey\n";
         $key_pressed = $getkey # Just a normal key.
@@ -216,10 +231,11 @@ while (1) {
         ReadMode 0;
         exit(0);
     } elsif ($specialkey) { # now do action based on what it was.
-        if ($key_pressed eq "PgUp") { $default_octave++; if($default_octave > $max_octave) {$default_octave = $max_octave; } }
-        elsif ($key_pressed eq "PgDown") { $default_octave--; if ($default_octave < $min_octave) { $default_octave = $min_octave; } }
-        elsif ($key_pressed eq "F1") { --$default_instrument ; $default_instrument = $default_instrument % scalar(keys(%instruments)); print "changed instrument to: $instruments{$default_instrument}\n"; }
-        elsif ($key_pressed eq "F2") { ++$default_instrument ; $default_instrument = $default_instrument % scalar(keys(%instruments)); print "changed instrument to: $instruments{$default_instrument}\n"; }
+        if ($key_pressed eq "PgUp") { $default_octave++; if($default_octave > $max_octave) {$default_octave = $max_octave; print "Max octave reached.\n"; } else { print "Shifted base octave up.\n"; } }
+        elsif ($key_pressed eq "PgDown") { $default_octave--; if ($default_octave < $min_octave) { $default_octave = $min_octave; print "Minimum octave reached.\n"; } else { print "Shifted base octave down.\n"; } }
+        elsif ($key_pressed eq "F1") { &showhelp(); }
+        elsif ($key_pressed eq "F3") { --$default_instrument ; $default_instrument = $default_instrument % scalar(keys(%instruments)); print "changed instrument to: $instruments{$default_instrument}\n"; }
+        elsif ($key_pressed eq "F4") { ++$default_instrument ; $default_instrument = $default_instrument % scalar(keys(%instruments)); print "changed instrument to: $instruments{$default_instrument}\n"; }
         elsif ($key_pressed eq "F11") { --$detune_default_range; print "changed detune_range to: $detune_default_range\n"; }
         elsif ($key_pressed eq "F12") { ++$detune_default_range; print "changed detune_range to: $detune_default_range\n"; }
         else { print "Key not defined\n"; }
@@ -301,6 +317,83 @@ sub how_many_playing {
     return $count;
 }
 
+# Simple keyboard printing function for quick reference.
+sub printkeyboard {
+    my $keymap = shift;
+    my $key_map_string = $notes_keymaps{$keymap};
+    $key_map_string =~ s/\s_//g;
+    $key_map_string =~ s/\s//g; # Remove whitespace.
+    my $how_many_octaves = int length($key_map_string) / 12;
+
+    my $keyboard_octave_art = <<EOK;
+_____________________________
+|  | | | |  |  | | | | | |  |
+|  |b| |d|  |  |g| |i| |k|  |
+|  |_| |_|  |  |_| |_| |_|  |
+| a | c | e | f | h | j | l |
+|(C)|(D)|(E)|(F)|(G)|(A)|(B)|
+|___|___|___|___|___|___|___|
+EOK
+
+    my $octave_art_keymap = "abcdefghijkl"x$how_many_octaves;
+
+#    print "octaveartmap: $octave_art_keymap\n";
+    print "Keyjam keyboard <-> key mapping chart:\n";
+
+    my $linenum = 1;
+    foreach my $artline (split(/\n/, $keyboard_octave_art)) {
+        my $this_output_line = "";
+        chomp($artline);
+        for (my $o = 0; $o < $how_many_octaves; $o++) {
+            my $line_octave = $artline;
+            if ($linenum == 1) {
+                substr($line_octave, 2, 8, 'Octave ' . ($default_octave + $o));
+            }
+            if ($linenum == 3 || $linenum == 5) {
+                for (my $i = 0; $i < 12; $i++) {
+                    my $poschar = substr($octave_art_keymap,$i,1); # The character in the art.
+                    my $notekey = substr($key_map_string, $i+(12*$o), 1); # The keymap key in that position.
+                    if ($notekey eq "_") {
+                        $line_octave =~ s/$poschar/ /;
+                    } else {
+                        $line_octave =~ s/$poschar/$notekey/;
+                    }
+                    my $art_char_post = index($artline, $poschar); # Position of art char mapping in art line.
+                    $line_octave =~ s/$poschar/$notekey/; # Not the best way, but works for now.....
+                }
+            }
+            if ($o > 0) {
+                $line_octave = substr($line_octave, 1, length($line_octave)-1);
+            }
+            $this_output_line .= $line_octave;
+        }
+        print "$this_output_line\n";
+        $linenum++;
+    }
+
+    return 1;
+}
+
+sub showhelp {
+
+
+    print <<EOF;
+
+ Exit program:  <Esc>        
+ Show Help      <F1>
+ Show Keyboard: <?>
+
+ Shift Octave Up:   <PgUp>
+ Shift Octave Down: <PgDown>
+
+ Change instrument up:   <F4>       Random Detune range up:   <F12>
+ Change instrument down: <F3>       Random Detune range down: <F11>
+
+EOF
+    &printkeyboard($default_note_keymap);
+
+    return 1;
+}
 
 sub getoffset {
     my $letter = shift;

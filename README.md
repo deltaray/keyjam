@@ -18,9 +18,8 @@ probably only allow 3 key presses to be registered at once.
 
 Its more of a novelty. But its fun to play with so I thought I'd
 release it. Surprisingly, the play command is pretty fast so there
-is almost no delay between pressing a key and hearing a sound. Every
-note you here is a process fork.
-
+is almost no delay between pressing a key and hearing a sound.
+Process forks never sounded so good.
 
 
 Requirements
@@ -29,7 +28,7 @@ Requirements
 You will need to make sure you have four things to use keyjam. Well, four actually.
 
 *   Unix, probably Linux would work best since that's where the development is done.
-*   Working sound (Duh!)
+*   Working sound (Of course!)
 *   Perl's Term::ReadKey module.
 *   sox play command
 
@@ -40,6 +39,8 @@ You can install the last two on Debian with the following command
 
 Usage
 =====
+
+To quit keyjam, press `<Esc>`.
 
 Note: If you're not using a qwerty mapped keyboard, you're going to have to do
 some work to get this to work properly. A future version will try to detect your
@@ -58,14 +59,13 @@ to which piano keys. The note name is shown below the mapped key in parentheses.
     |(C)|(D)|(E)|(F)|(G)|(A)|(B)|
     |___|___|___|___|___|___|___|
 
-
-To quit keyjam, press `<Esc>`.
+You can print the current keyboard mapping using `<F1>` or `?`.
 
 Here are some other keys that can be used to control keyjam:
 
-*   `<PgUp>`, `<PgDown>` - Change octave
-*   `<F1>`, `<F2>` - Change instrument (up/down)
-*   `<F11>`, `<F12>` - Change detune range effect. (up/down)
+*   `<PgDown>`, `<PgUp>` - Change octave (down/up)
+*   `<F3>`, `<F4>` - Change instrument (down/up)
+*   `<F11>`, `<F12>` - Change detune range effect. (down/up)
 
 
 Demos
@@ -87,7 +87,10 @@ and stripped. You can map additional octaves onto your keymap by continuing
 on after you reach the 12th note. You will need to prefix the following octave
 with an underscore character. keyjam will detect this automatically and
 setup the next octave automatically. You can also skip mappings of certain
-notes by using an underscore character(`_`)
+notes by using an underscore character(`_`).
+
+In the future I may turn this into more of a curses like program that always
+displays the keyboard and current settings.
 
 
 License
